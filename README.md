@@ -3,6 +3,11 @@
 
 A dummy SMTP server for Windows, Linux, Mac OS-X (and maybe elsewhere where .NET Core is available). Lets you test your application without spamming your real customers.
 
+## WEB Marketing Fork changes
+- MailBox isloation, only admin user have mailbox drop down enabled, other users cannot change mailbox
+- label with current username is added after search box
+- forcing Croatian date locale (TODO: add setting)
+
 smtp4dev support many advanced features:
 - OpenAPI/Swagger API
 - IMAP and POP3 access to retrieve and delete messages
