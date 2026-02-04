@@ -33,7 +33,7 @@ namespace Rnwood.Smtp4dev.Server
 
     public interface ISmtp4devServer
     {
-        RelayResult TryRelayMessage(Message message, MailboxAddress[] overrideRecipients);
+        RelayResult TryRelayMessage(Message message, MailboxAddress[] overrideRecipients, string authenticatedUser);
         Exception Exception { get; }
         bool IsRunning { get; }
         public IPEndPoint[] ListeningEndpoints { get;  }

@@ -153,8 +153,14 @@ namespace Rnwood.Smtp4dev.Server
             Smtp4devDbContext dbContext = scope.ServiceProvider.GetService<Smtp4devDbContext>();
             Session dbSession = dbContext.Sessions.Find(activeSessionsToDbId[e.Connection.Session]);
 
-            var apiSession = new ApiModel.Session(dbSession);
+            string authenticatedUser = "";
+            if (e.Connection.Session.AuthenticationCredentials is IAuthenticationCredentialsCanValidateWithPassword val)
+            {
+                authenticatedUser = val.Username;
+            }
 
+            log.Information("Session created for user: {AuthenticatedUser}", authenticatedUser);
+            var apiSession = new ApiModel.Session(dbSession, authenticatedUser);
             var errorResponse = scriptingHost.ValidateCommand(e.Command, apiSession, e.Connection);
 
             if (errorResponse != null)
@@ -171,7 +177,15 @@ namespace Rnwood.Smtp4dev.Server
             using var scope = serviceScopeFactory.CreateScope();
             Smtp4devDbContext dbContext = scope.ServiceProvider.GetService<Smtp4devDbContext>();
             var session = dbContext.Sessions.AsNoTracking().Single(s => s.Id == sessionId);
-            var apiSession = new ApiModel.Session(session);
+
+            string authenticatedUser = "";
+            if (e.Connection.Session.AuthenticationCredentials is IAuthenticationCredentialsCanValidateWithPassword val)
+            {
+                authenticatedUser = val.Username;
+            }
+
+            log.Information("Session created for user: {AuthenticatedUser}", authenticatedUser);
+            var apiSession = new ApiModel.Session(session, authenticatedUser);
 
             if (!this.scriptingHost.ValidateRecipient(apiSession, e.Recipient, e.Connection))
             {
@@ -219,7 +233,13 @@ namespace Rnwood.Smtp4dev.Server
             Smtp4devDbContext dbContext = scope.ServiceProvider.GetService<Smtp4devDbContext>();
             Session dbSession = dbContext.Sessions.Find(activeSessionsToDbId[e.Connection.Session]);
 
-            var apiSession = new ApiModel.Session(dbSession);
+            string authenticatedUser = "";
+            if (e.Connection.Session.AuthenticationCredentials is IAuthenticationCredentialsCanValidateWithPassword val)
+            {
+                authenticatedUser = val.Username;
+            }
+            log.Information("Session created for user: {AuthenticatedUser}", authenticatedUser);
+            var apiSession = new ApiModel.Session(dbSession, authenticatedUser);
 
             var errorResponse = scriptingHost.ValidateMessage(apiMessage, apiSession, e.Connection);
 
@@ -346,7 +366,13 @@ namespace Rnwood.Smtp4dev.Server
             Smtp4devDbContext dbContext = scope.ServiceProvider.GetService<Smtp4devDbContext>();
             var session = dbContext.Sessions.Single(s => s.Id == sessionId);
 
-            var apiSession = new ApiModel.Session(session);
+            string authenticatedUser = "";
+            if (e.Credentials is IAuthenticationCredentialsCanValidateWithPassword valp)
+            {
+                authenticatedUser = valp.Username;
+            }
+            log.Information("Session created for user: {AuthenticatedUser}", authenticatedUser);
+            var apiSession = new ApiModel.Session(session, authenticatedUser);
 
             AuthenticationResult? result = scriptingHost.ValidateCredentials(apiSession, e.Credentials, e.Connection);
 
@@ -616,8 +642,14 @@ namespace Rnwood.Smtp4dev.Server
                     message.MailboxFolderId = inboxFolder.Id;
                 }
             }
-            
-            var relayResult = TryRelayMessage(message, null);
+
+            string authenticatedUser = "";
+            if (session.AuthenticationCredentials is IAuthenticationCredentialsCanValidateWithPassword val)
+            {
+                authenticatedUser = val.Username;
+            }
+
+            var relayResult = TryRelayMessage(message, null, authenticatedUser);
             message.RelayError = string.Join("\n", relayResult.Exceptions.Select(e => e.Key + ": " + e.Value.Message));
             
             ImapState imapState = dbContext.ImapState.Single();
@@ -686,7 +718,7 @@ namespace Rnwood.Smtp4dev.Server
             }
         }
 
-        public RelayResult TryRelayMessage(Message message, MailboxAddress[] overrideRecipients)
+        public RelayResult TryRelayMessage(Message message, MailboxAddress[] overrideRecipients, string authenticatedUser)
         {
             var result = new RelayResult();
 
@@ -705,9 +737,10 @@ namespace Rnwood.Smtp4dev.Server
                     .Where(r => relayOptions.CurrentValue.AutomaticEmails.Contains(r.Address, StringComparer.OrdinalIgnoreCase))
                 );
 
+                log.Information("Session created for user: {AuthenticatedUser}", authenticatedUser);
 
                 var apiMessage = new ApiModel.Message(message);
-                var apiSession = new ApiModel.Session(message.Session);
+                var apiSession = new ApiModel.Session(message.Session, authenticatedUser);
                 foreach (string recipient in message.To.Split(','))
                 {
                     recipients.AddRange(scriptingHost.GetAutoRelayRecipients(apiMessage, recipient, apiSession)

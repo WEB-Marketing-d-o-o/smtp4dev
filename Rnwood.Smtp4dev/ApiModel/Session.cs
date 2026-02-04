@@ -8,7 +8,7 @@ namespace Rnwood.Smtp4dev.ApiModel
 {
     public class Session
     {
-        public Session(DbModel.Session dbSession)
+        public Session(DbModel.Session dbSession, string authenticatedUser = "")
         {
             this.Id = dbSession.Id;
             this.Error = dbSession.SessionError;
@@ -18,8 +18,16 @@ namespace Rnwood.Smtp4dev.ApiModel
             {
                 this.Warnings.Add(new SessionWarning { Details = "Session contains bare line feeds (LF without CR). RFC 5321 requires CRLF line endings." });
             }
+
+            this.ClientAddress = dbSession.ClientAddress;
+            this.ClientName = dbSession.ClientName;
+            this.AuthenticatedUser = authenticatedUser;            
         }
 
+        public string AuthenticatedUser { get; set; }
+
+        public string ClientAddress { get; set; }
+        public string ClientName { get; set; }
 
         public Guid Id { get; private set; }
 

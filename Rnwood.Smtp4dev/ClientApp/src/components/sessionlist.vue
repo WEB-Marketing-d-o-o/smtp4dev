@@ -122,7 +122,7 @@
             cellValue: Date,
             index: number
         ): string {
-            return cellValue?.toLocaleString();
+					return cellValue?.toLocaleString('hr-HR', { timeZone: 'Europe/Zagreb' });
         }
 
         selectSession(session: SessionSummary) {

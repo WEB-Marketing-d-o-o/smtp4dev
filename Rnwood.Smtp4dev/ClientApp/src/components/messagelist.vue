@@ -1,661 +1,678 @@
 ﻿<template>
-    <div class="messagelist">
+		<div class="messagelist">
 
-        <el-dialog v-model="composeDialogVisible" title="Send" destroy-on-close append-to-body align-center width="80%">
-            <messagecompose @closed="() => composeDialogVisible=false" />
-        </el-dialog>
+				<el-dialog v-model="composeDialogVisible" title="Send" destroy-on-close append-to-body align-center width="80%">
+						<messagecompose @closed="() => composeDialogVisible=false" />
+				</el-dialog>
 
-        <div class="toolbar">
-
-
-            <el-button
-                       v-on:click="composeDialogVisible=true"
-                       :disabled="!isRelayAvailable"
-                       title="Compose">Compose</el-button>
-
-            <el-button
-                       v-on:click="showFileSelector"
-                       icon="Upload"
-                       :disabled="!selectedMailbox"
-                       title="Import EML files">Import</el-button>
-
-            <el-button-group>
-                <el-button icon="Delete"
-                           v-on:click="deleteSelected"
-                           :disabled="!selectedmessage"
-                           title="Delete">Delete</el-button>
-
-                <el-button v-on:click="relaySelected"
-                           icon="d-arrow-right"
-                           :disabled="!selectedmessage || !isRelayAvailable"
-                           :loading="isRelayInProgress"
-                           title="Relay">Relay...</el-button>
-            </el-button-group>
-
-            <el-button-group>
-                <el-button icon="refresh"
-                           v-on:click="refresh"
-                           :disabled="loading || !selectedMailbox"
-                           title="Refresh"></el-button>
-                <el-button v-on:click="markAllMessageRead"
-                           :disabled="loading  || !selectedMailbox"
-                           title="Mark all as read">
-                    <font-awesome-icon :icon="['fa-regular','envelope-open']" />
-                </el-button>
-                <el-button icon="close" title="Clear" @click="clear"></el-button>
-            </el-button-group>
+				<div class="toolbar">
 
 
-            <el-select style="flex: 1 0 200px;" v-model="selectedMailbox" class="fill">
-                <el-option v-for="item in availableMailboxes"
-                           :key="item.name"
-                           :label="item.name"
-                           :value="item.name" />
+						<el-button
+											 v-on:click="composeDialogVisible=true"
+											 :disabled="!isRelayAvailable"
+											 title="Compose">Compose</el-button>
 
-                <template #prefix>
-                    <el-icon><MessageBox /></el-icon>
-                </template>
+						<el-button
+											 v-on:click="showFileSelector"
+											 icon="Upload"
+											 :disabled="!selectedMailbox"
+											 title="Import EML files">Import</el-button>
 
-            </el-select>
+						<el-button-group>
+								<el-button icon="Delete"
+													 v-on:click="deleteSelected"
+													 :disabled="!selectedmessage"
+													 title="Delete">Delete</el-button>
 
-            <el-select style="flex: 1 0 150px;" v-model="selectedFolder" class="fill" :disabled="!selectedMailbox">
-                <el-option v-for="folder in availableFolders"
-                           :key="folder"
-                           :label="folder"
-                           :value="folder" />
+								<el-button v-on:click="relaySelected"
+													 icon="d-arrow-right"
+													 :disabled="!selectedmessage || !isRelayAvailable"
+													 :loading="isRelayInProgress"
+													 title="Relay">Relay...</el-button>
+						</el-button-group>
 
-                <template #prefix>
-                    <el-icon><Files /></el-icon>
-                </template>
+						<el-button-group>
+								<el-button icon="refresh"
+													 v-on:click="refresh"
+													 :disabled="loading || !selectedMailbox"
+													 title="Refresh"></el-button>
+								<el-button v-on:click="markAllMessageRead"
+													 :disabled="loading  || !selectedMailbox"
+													 title="Mark all as read">
+										<font-awesome-icon :icon="['fa-regular','envelope-open']" />
+								</el-button>
+								<el-button icon="close" title="Clear" @click="clear"></el-button>
+						</el-button-group>
 
-            </el-select>
+
+						<el-select style="flex: 1 0 200px;" v-model="selectedMailbox" class="fill" :disabled="!isAdmin">
+								<el-option v-for="item in availableMailboxes"
+													 :key="item.name"
+													 :label="item.name"
+													 :value="item.name" />
+
+								<template #prefix>
+										<el-icon><MessageBox /></el-icon>
+								</template>
+
+						</el-select>
+
+						<el-select style="flex: 1 0 150px;" v-model="selectedFolder" class="fill" :disabled="!selectedMailbox">
+								<el-option v-for="folder in availableFolders"
+													 :key="folder"
+													 :label="folder"
+													 :value="folder" />
+
+								<template #prefix>
+										<el-icon><Files /></el-icon>
+								</template>
+
+						</el-select>
 
 
 
-            <el-input class="fill"
-                      v-model="searchTerm"
-                      clearable
-                      placeholder="Search"
-                      prefix-icon="search"
-                      style="flex: 1 0 150px" />
+						<el-input class="fill"
+											v-model="searchTerm"
+											clearable
+											placeholder="Search"
+											prefix-icon="search"
+											style="flex: 1 0 150px" />
 
-        </div>
+						<span v-if="currentUsername" style="flex: 0 0 auto; padding-left: 8px; align-self: center; white-space: nowrap;">
+							u: {{ currentUsername }}
+						</span>
 
-        <el-alert v-if="error" type="error" title="Error" show-icon>
-            {{ error.message }}
-            <el-button v-on:click="refresh">Retry</el-button>
-        </el-alert>
+				</div>
 
-        <el-table :data="messages"
-                  v-loading="loading"
-                  :empty-text="emptyText"
-                  highlight-current-row
-                  @current-change="handleCurrentChange"
-                  @sort-change="sort"
-                  :default-sort="{ prop: 'receivedDate', order: 'descending' }"
-                  class="table"
-                  type="selection"
-                  reserve-selection="true"
-                  row-key="id"
-                  :row-class-name="getRowClass"
-                  ref="table"
-                  stripe>
-            <el-table-column property="receivedDate"
-                             label="Received"
-                             width="160"
-                             sortable="custom"
-                             :formatter="formatDate"></el-table-column>
-            <el-table-column property="from"
-                             label="From"
-                             width="140"
-                             sortable="custom"></el-table-column>
-            <el-table-column property="to"
-                             label="To"
-                             width="180"
-                             sortable="custom">
-                <template #default="scope">
-                    <div style="display: flow; gap: 6px;">
-                        <div v-for="recip in scope.row.to" :key="recip">
-                            <strong v-if="(scope.row.deliveredTo??'').includes(recip)">{{recip}}</strong>
-                            <span v-if="!(scope.row.deliveredTo??'').includes(recip)">{{recip}}</span>
-                        </div>
-                    </div>
-                </template>
-            </el-table-column>
-            <el-table-column property="isRelayed"
-                             label=""
-                             width="28">
-                <template #default="scope">
+				<el-alert v-if="error" type="error" title="Error" show-icon>
+						{{ error.message }}
+						<el-button v-on:click="refresh">Retry</el-button>
+				</el-alert>
 
-                    <el-tooltip effect="light"
-                                content="Message has been relayed"
-                                placement="top-start">
-                        <span> <i v-if="scope.row.isRelayed" class="fas fa-share-square"></i></span>
-                    </el-tooltip>
-                </template>
-            </el-table-column>
-            <el-table-column property="subject" label="Subject" sortable="custom">
-                <template #default="scope">
-                    {{ scope.row.subject }}
-                    <i class="paperclip"
-                       v-if="scope.row.attachmentCount"
-                       :title="scope.row.attachmentCount + ' attachments'"></i>
-                </template>
-            </el-table-column>
-            <el-table-column property="hasWarnings"
-                             label=""
-                             width="28">
-                <template #default="scope">
-                    <el-tooltip effect="light"
-                                content="Message has warnings"
-                                placement="top-start">
-                        <el-icon v-if="scope.row.hasWarnings" style="color: orange;">
-                            <Warning />
-                        </el-icon>
-                    </el-tooltip>
-                </template>
-            </el-table-column>
-        </el-table>
-        <messagelistpager :paged-data="pagedServerMessages"
-                          @on-current-page-change="handlePaginationCurrentChange"
-                          @on-page-size-change="handlePaginationPageSizeChange"></messagelistpager>
-    </div>
+				<el-table :data="messages"
+									v-loading="loading"
+									:empty-text="emptyText"
+									highlight-current-row
+									@current-change="handleCurrentChange"
+									@sort-change="sort"
+									:default-sort="{ prop: 'receivedDate', order: 'descending' }"
+									class="table"
+									type="selection"
+									reserve-selection="true"
+									row-key="id"
+									:row-class-name="getRowClass"
+									ref="table"
+									stripe>
+						<el-table-column property="receivedDate"
+														 label="Received"
+														 width="160"
+														 sortable="custom"
+														 :formatter="formatDate"></el-table-column>
+						<el-table-column property="from"
+														 label="From"
+														 width="140"
+														 sortable="custom"></el-table-column>
+						<el-table-column property="to"
+														 label="To"
+														 width="180"
+														 sortable="custom">
+								<template #default="scope">
+										<div style="display: flow; gap: 6px;">
+												<div v-for="recip in scope.row.to" :key="recip">
+														<strong v-if="(scope.row.deliveredTo??'').includes(recip)">{{recip}}</strong>
+														<span v-if="!(scope.row.deliveredTo??'').includes(recip)">{{recip}}</span>
+												</div>
+										</div>
+								</template>
+						</el-table-column>
+						<el-table-column property="isRelayed"
+														 label=""
+														 width="28">
+								<template #default="scope">
+
+										<el-tooltip effect="light"
+																content="Message has been relayed"
+																placement="top-start">
+												<span> <i v-if="scope.row.isRelayed" class="fas fa-share-square"></i></span>
+										</el-tooltip>
+								</template>
+						</el-table-column>
+						<el-table-column property="subject" label="Subject" sortable="custom">
+								<template #default="scope">
+										{{ scope.row.subject }}
+										<i class="paperclip"
+											 v-if="scope.row.attachmentCount"
+											 :title="scope.row.attachmentCount + ' attachments'"></i>
+								</template>
+						</el-table-column>
+						<el-table-column property="hasWarnings"
+														 label=""
+														 width="28">
+								<template #default="scope">
+										<el-tooltip effect="light"
+																content="Message has warnings"
+																placement="top-start">
+												<el-icon v-if="scope.row.hasWarnings" style="color: orange;">
+														<Warning />
+												</el-icon>
+										</el-tooltip>
+								</template>
+						</el-table-column>
+				</el-table>
+				<messagelistpager :paged-data="pagedServerMessages"
+													@on-current-page-change="handlePaginationCurrentChange"
+													@on-page-size-change="handlePaginationPageSizeChange"></messagelistpager>
+		</div>
 </template>
 <script lang="ts">
-    import { Component, Watch, Prop, Vue, toNative, Emit } from "vue-facing-decorator";
-    import { ElMessageBox, ElNotification, TableInstance } from "element-plus";
-    import MessagesController from "../ApiClient/MessagesController";
-    import MessageSummary from "../ApiClient/MessageSummary";
-    import HubConnectionManager from "../HubConnectionManager";
-    import sortedArraySync from "../sortedArraySync";
-    import { Mutex } from "async-mutex";
-    import MessageNotificationManager from "../MessageNotificationManager";
-    import { debounce } from "ts-debounce";
-    import ServerController from "../ApiClient/ServerController";
-    import ClientSettingsManager from "../ApiClient/ClientSettingsManager";
-
-    import PagedResult, { EmptyPagedResult } from "@/ApiClient/PagedResult";
-    import Messagelistpager from "@/components/messagelistpager.vue";
-    import Mailbox from "../ApiClient/Mailbox";
-    import MailboxesController from "../ApiClient/MailboxesController";
-    import MessageCompose from "@/components/messagecompose.vue";
-
-
-    @Component({
-        components: {
-            Messagelistpager,
-            messagecompose: MessageCompose
-        },
-    })
-    class MessageList extends Vue {
-
-        private selectedSortDescending: boolean = true;
-        private selectedSortColumn: string = "receivedDate";
-
-        page: number = 1;
-
-        pagedServerMessages: PagedResult<MessageSummary> | undefined = EmptyPagedResult<MessageSummary>();
-
-        @Prop({ default: null })
-        connection: HubConnectionManager | null = null;
-
-        messages: MessageSummary[] = [];
-        selectedMailbox: string | null = null;
-        selectedFolder: string = "INBOX"; // Default to INBOX folder
-        availableFolders: string[] = [];
-
-        isRelayInProgress: boolean = false;
-        isRelayAvailable: boolean = false;
-
-        composeDialogVisible = false;
-        pendingSelectMessageAfterRefresh: MessageSummary | null = null;
-
-        get emptyText() {
-            if (this.loading) {
-                return "Loading";
-            }
-
-            if (!this.selectedMailbox) {
-                return "Select a mailbox to view messages";
-            }
-
-            const folderText = this.selectedFolder ? ` in folder '${this.selectedFolder}'` : '';
-            return this.searchTerm ?
-                `No messages matching '${this.searchTerm}' in mailbox '${this.selectedMailbox}'${folderText}`
-                : `No messages in mailbox '${this.selectedMailbox}'${folderText}`;
-        }
-
-        error: Error | null = null;
-        selectedmessage: MessageSummary | null = null;
-        searchTerm: string = "";
-        loading: boolean = true;
-        availableMailboxes: Mailbox[] | null = null;
-
-        private messageNotificationManager: MessageNotificationManager | null = null;
-
-        selectMessage(message: MessageSummary) {
-            (this.$refs.table as TableInstance).setCurrentRow(message);
-            this.handleCurrentChange(message);
-        }
-
-        @Emit("selected-message-changed")
-        handleCurrentChange(message: MessageSummary | null) {
-            this.selectedmessage = message;
-            return message;
-        }
-
-        async handlePaginationCurrentChange(page: number) {
-            this.page = page;
-            await this.refresh(false);
-        }
-
-        async handlePaginationPageSizeChange(pageSize: number) {
-            ClientSettingsManager.updateClientSettings({ pageSize });
-            await this.refresh(false);
-        }
-
-        formatDate(row: number, column: number, cellValue: Date): string {
-            return cellValue?.toLocaleString();
-        }
-
-
-        getRowClass(event: { row: MessageSummary }): string {
-            return event.row.isUnread ? "unread" : "read";
-        }
-
-        async relaySelected() {
-            if (this.selectedmessage == null) {
-                return;
-            }
-
-            let emails: string[];
-
-            try {
-                let dialogResult = await ElMessageBox.prompt(
-                    "Email address(es) to relay to (separate multiple with ,)",
-                    "Relay Message",
-                    {
-                        confirmButtonText: "OK",
-                        inputValue: this.selectedmessage.to.join(","),
-                        cancelButtonText: "Cancel",
-                        inputPattern: /[^, ]+(, *[^, ]+)*/,
-                        inputErrorMessage: "Invalid email addresses",
-                    }
-                );
-
-                emails = dialogResult.value.split(",").map((e) => e.trim());
-            } catch {
-                return;
-            }
-
-            try {
-                this.isRelayInProgress = true;
-                await new MessagesController().relayMessage(this.selectedmessage.id, {
-                    overrideRecipientAddresses: emails,
-                });
-
-                ElNotification.success({
-                    title: "Relay Message Success",
-                    message: "Completed OK",
-                });
-            } catch (e: any) {
-                const message = e.response?.data?.detail ?? e.message;
-
-                ElNotification.error({ title: "Relay Message Failed", message: message });
-            } finally {
-                this.isRelayInProgress = false;
-            }
-        }
-
-        async deleteSelected() {
-            if (this.selectedmessage == null) {
-                return;
-            }
-
-            this.loading = true;
-
-            let messageToDelete = this.selectedmessage;
-
-            let nextIndex = this.messages.indexOf(messageToDelete) + 1;
-            if (nextIndex < this.messages.length) {
-                this.selectMessage(this.messages[nextIndex]);
-            }
-
-            try {
-                await new MessagesController().delete(messageToDelete.id);
-                await this.refresh(false);
-            } catch (e: any) {
-                ElNotification.error({
-                    title: "Delete Message Failed",
-                    message: e.message,
-                });
-            } finally {
-                this.loading = false;
-            }
-        }
-
-        showFileSelector() {
-            // Create a hidden file input element
-            const fileInput = document.createElement('input');
-            fileInput.type = 'file';
-            fileInput.accept = '.eml';
-            fileInput.multiple = true;
-            fileInput.style.display = 'none';
-            
-            // Handle file selection
-            fileInput.addEventListener('change', (event: any) => {
-                const files = event.target.files;
-                if (files && files.length > 0) {
-                    this.importFiles(Array.from(files));
-                }
-                // Clean up the temporary element
-                document.body.removeChild(fileInput);
-            });
-            
-            // Add to DOM and trigger click
-            document.body.appendChild(fileInput);
-            fileInput.click();
-        }
-
-        async importFiles(files: File[]) {
-            if (files.length === 0) {
-                return;
-            }
-
-            let successCount = 0;
-            let failCount = 0;
-            const importedIds: string[] = [];
-
-            // Show initial progress notification and store reference to dismiss it later
-            const progressNotification = ElNotification.info({
-                title: "Import in Progress",
-                message: `Importing ${files.length} file(s)...`,
-                duration: 0  // Don't auto-dismiss, we'll handle it manually
-            });
-
-            try {
-                for (const file of files) {
-                    try {
-                        // Read file content as text
-                        const emlContent = await this.readFileAsText(file);
-                        
-                        // Call the import API for this single file
-                        const messageId = await new MessagesController().import(emlContent, this.selectedMailbox);
-                        
-                        successCount++;
-                        importedIds.push(messageId);
-                        
-                    } catch (e: any) {
-                        failCount++;
-                        const message = e.response?.data ?? e.message;
-                        ElNotification.error({ 
-                            title: "Import Failed", 
-                            message: `${file.name}: ${message}`,
-                            duration: 5000
-                        });
-                    }
-                }
-
-                // Show final success notification
-                if (successCount > 0) {
-                    ElNotification.success({
-                        title: "Import Complete",
-                        message: `Successfully imported ${successCount} of ${files.length} files`,
-                        duration: 4000
-                    });
-
-                    // Refresh the message list
-                    await this.refresh(false);
-                    
-                    // Select the first imported message by its specific ID with retry logic
-                    if (importedIds.length > 0) {
-                        const firstImportedId = importedIds[0];
-                        
-                        // Retry mechanism to wait for the imported message to appear in the list
-                        let retryCount = 0;
-                        const maxRetries = 10;
-                        const retryDelay = 200; // 200ms between retries
-                        
-                        while (retryCount < maxRetries) {
-                            const importedMessage = this.messages.find(m => m.id === firstImportedId);
-                            if (importedMessage) {
-                                this.selectMessage(importedMessage);
-                                break;
-                            }
-                            
-                            // Wait before retrying
-                            await new Promise(resolve => setTimeout(resolve, retryDelay));
-                            retryCount++;
-                        }
-                    }
-                }
-            } finally {
-                // Always dismiss the progress notification when import completes
-                progressNotification.close();
-            }
-        }
-
-        readFileAsText(file: File): Promise<string> {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target?.result as string);
-                reader.onerror = (e) => reject(new Error('Failed to read file'));
-                reader.readAsText(file);
-            });
-        }
-
-        async clear() {
-
-            try {
-                await ElMessageBox.confirm(`Delete all messages in mailbox '${this.selectedMailbox}'?`)
-            } catch {
-                return;
-            }
-
-
-            try {
-                this.loading = true;
-                await new MessagesController().deleteAll(this.selectedMailbox!);
-                await this.refresh(true);
-            } catch (e: any) {
-                ElNotification.error({
-                    title: "Delete All Messages Failed",
-                    message: e.message,
-                });
-            } finally {
-                this.loading = false;
-            }
-        }
-
-        private debouncedRefresh = debounce(() => this.refresh(false), 200);
-
-        @Watch("searchTerm")
-        onSearchTermChanged() {
-            this.debouncedDoSearch();
-        }
-        debouncedDoSearch = debounce(() => this.refresh(false), 200);
-
-        @Watch("selectedMailbox")
-        async onMailboxChanged() {
-            this.initialMailboxLoadDone = false;
-            this.messageNotificationManager = new MessageNotificationManager(this.selectedMailbox,
-                (message) => {
-                    if (this.selectedFolder && this.selectedFolder != "INBOX") {
-                        this.selectedFolder = "INBOX";
-                        this.pendingSelectMessageAfterRefresh = message;
-                        return;
-                    }
-
-                    this.selectMessage(message);
-                    this.handleCurrentChange(message);
-                }
-            );
-            // Default to INBOX folder when mailbox changes
-            this.selectedFolder = "INBOX";
-            await this.loadFolders();
-            await this.refresh(true, false);
-        }
-
-        @Watch("selectedFolder")
-        async onFolderChanged() {
-            await this.refresh(false);
-        }
-
-        async loadFolders() {
-            if (this.selectedMailbox) {
-                try {
-                    this.availableFolders = await new MessagesController().getFolders(this.selectedMailbox);
-                    // Ensure INBOX folder exists, if not fall back to first available folder
-                    if (this.availableFolders.length > 0 && !this.availableFolders.includes("INBOX")) {
-                        this.selectedFolder = this.availableFolders[0];
-                    }
-                } catch (error) {
-                    console.error("Failed to load folders:", error);
-                    this.availableFolders = [];
-                }
-            } else {
-                this.availableFolders = [];
-            }
-        }
-
-        private lastSort: string | null = null;
-        private lastSortDescending: boolean = false;
-        private mutex = new Mutex();
-
-        initialMailboxLoadDone = false;
-
-        async markAllMessageRead() {
-            await new MessagesController().markAllMessageRead(this.selectedMailbox!);
-        }
-
-        async refresh(includeNotifications: boolean, silent: boolean = false) {
-            if (!silent) this.loading = true;
-            let unlock = await this.mutex.acquire();
-            try {
-                this.error = null;
-
-                const server = await this.connection!.getServer()
-                this.isRelayAvailable = !!server.relaySmtpServer;
-
-                const mailboxes = await new MailboxesController().getAll();
-                this.availableMailboxes = mailboxes.sort((a, b) => a.name.localeCompare(b.name));
-                if (!this.selectedMailbox) {
-                    this.selectedMailbox = this.availableMailboxes.find(m => m.name == server.currentUserDefaultMailboxName)?.name ?? this.availableMailboxes[this.availableMailboxes.length - 1]?.name ?? null;
-                } else {
-                    //Potentially removed mailbox
-                    this.selectedMailbox = this.availableMailboxes.find(m => m.name == this.selectedMailbox)?.name ?? null;
-                }
-
-                // Get current pageSize from settings
-                const clientSettings = await ClientSettingsManager.getClientSettings();
-                const pageSize = clientSettings.pageSize || 25;
-
-                // Copy in case they are mutated during the async load below
-                let sortColumn = this.selectedSortColumn;
-                let sortDescending = this.selectedSortDescending;
-
-                if (!this.selectedMailbox) {
-                    this.pagedServerMessages = { currentPage: 1, firstRowOnPage: 0, lastRowOnPage: 0, pageCount: 1, rowCount: 0, pageSize: pageSize, results: [] };
-                } else {
-
-                    this.pagedServerMessages = await new MessagesController().getSummaries(
-                        this.selectedMailbox,
-                        this.searchTerm,
-                        sortColumn,
-                        sortDescending,
-                        this.page,
-                        pageSize,
-                        this.selectedFolder || null
-                    );
-                }
-
-                if (
-                    !this.lastSort ||
-                    this.lastSort != sortColumn ||
-                    this.lastSortDescending != sortDescending ||
-                    this.pagedServerMessages.results.length == 0
-                ) {
-                    this.messages.splice(
-                        0,
-                        this.messages.length,
-                        ...this.pagedServerMessages.results
-                    );
-                } else {
-                    sortedArraySync(
-                        this.pagedServerMessages.results,
-                        this.messages,
-                        (a: MessageSummary, b: MessageSummary) => a.id == b.id,
-                        (sourceItem: MessageSummary, targetItem: MessageSummary) => {
-                            targetItem.isUnread = sourceItem.isUnread;
-                            targetItem.isRelayed = sourceItem.isRelayed;
-                        }
-                    );
-                }
-
-                if (includeNotifications) {
-                    await this.messageNotificationManager?.refresh(!this.initialMailboxLoadDone);
-                }
-
-                if (this.pendingSelectMessageAfterRefresh) {
-                    this.selectMessage(this.pendingSelectMessageAfterRefresh);
-                    this.pendingSelectMessageAfterRefresh = null;
-                }
-
-                this.initialMailboxLoadDone = true;
-                this.lastSort = sortColumn;
-                this.lastSortDescending = this.selectedSortDescending;
-            } catch (e: any) {
-                this.error = e;
-            } finally {
-                if (!silent) this.loading = false;
-                unlock();
-            }
-        }
-
-        async sort(sortOptions: { prop: string, order: string }) {
-            let descending: boolean = true;
-            if (sortOptions.order === "ascending") {
-                descending = false;
-            }
-
-            if (
-                this.selectedSortColumn != sortOptions.prop ||
-                this.selectedSortDescending != descending
-            ) {
-                this.selectedSortColumn = sortOptions.prop || "receivedDate";
-                this.selectedSortDescending = descending;
-
-                await this.refresh(false);
-            }
-        }
-
-        async mounted() {
-            this.loading = true;
-            await this.refresh(true, false);
-        }
-
-        async created() {
-        }
-
-        @Watch("connection")
-        async onConnectionChanged() {
-            if (this.connection) {
-                this.connection.on("messageschanged", async () => {
-                    await this.refresh(true, true);
-                });
-                this.connection.onServerChanged(async () => {
-                    await this.refresh(true, true);
-                });
-                this.connection.on("mailboxeschanged", async () => {
-                    await this.refresh(false, true);
-                });
-                this.connection.addOnConnectedCallback(() => {
-                    this.refresh(true, true);
-                });
-            }
-        }
-    }
-
-
-    export default toNative(MessageList)
+		import { Component, Watch, Prop, Vue, toNative, Emit } from "vue-facing-decorator";
+		import { ElMessageBox, ElNotification, TableInstance } from "element-plus";
+		import MessagesController from "../ApiClient/MessagesController";
+		import MessageSummary from "../ApiClient/MessageSummary";
+		import HubConnectionManager from "../HubConnectionManager";
+		import sortedArraySync from "../sortedArraySync";
+		import { Mutex } from "async-mutex";
+		import MessageNotificationManager from "../MessageNotificationManager";
+		import { debounce } from "ts-debounce";
+		import ServerController from "../ApiClient/ServerController";
+		import ClientSettingsManager from "../ApiClient/ClientSettingsManager";
+
+		import PagedResult, { EmptyPagedResult } from "@/ApiClient/PagedResult";
+		import Messagelistpager from "@/components/messagelistpager.vue";
+		import Mailbox from "../ApiClient/Mailbox";
+		import MailboxesController from "../ApiClient/MailboxesController";
+		import MessageCompose from "@/components/messagecompose.vue";
+
+
+		@Component({
+				components: {
+						Messagelistpager,
+						messagecompose: MessageCompose
+				},
+		})
+		class MessageList extends Vue {
+
+				private selectedSortDescending: boolean = true;
+				private selectedSortColumn: string = "receivedDate";
+
+				page: number = 1;
+
+				pagedServerMessages: PagedResult<MessageSummary> | undefined = EmptyPagedResult<MessageSummary>();
+
+				@Prop({ default: null })
+				connection: HubConnectionManager | null = null;
+
+				messages: MessageSummary[] = [];
+				selectedMailbox: string | null = null;
+				selectedFolder: string = "INBOX"; // Default to INBOX folder
+				availableFolders: string[] = [];
+
+				isRelayInProgress: boolean = false;
+				isRelayAvailable: boolean = false;
+				private currentUsername: string | null = null;
+
+				get isAdmin(): boolean {
+						return (this.currentUsername ?? "").toLowerCase() === "admin";
+				}
+
+				composeDialogVisible = false;
+				pendingSelectMessageAfterRefresh: MessageSummary | null = null;
+
+				get emptyText() {
+						if (this.loading) {
+								return "Loading";
+						}
+
+						if (!this.selectedMailbox) {
+								return "Select a mailbox to view messages";
+						}
+
+						const folderText = this.selectedFolder ? ` in folder '${this.selectedFolder}'` : '';
+						return this.searchTerm ?
+								`No messages matching '${this.searchTerm}' in mailbox '${this.selectedMailbox}'${folderText}`
+								: `No messages in mailbox '${this.selectedMailbox}'${folderText}`;
+				}
+
+				error: Error | null = null;
+				selectedmessage: MessageSummary | null = null;
+				searchTerm: string = "";
+				loading: boolean = true;
+				availableMailboxes: Mailbox[] | null = null;
+
+				private messageNotificationManager: MessageNotificationManager | null = null;
+
+				selectMessage(message: MessageSummary) {
+						(this.$refs.table as TableInstance).setCurrentRow(message);
+						this.handleCurrentChange(message);
+				}
+
+				@Emit("selected-message-changed")
+				handleCurrentChange(message: MessageSummary | null) {
+						this.selectedmessage = message;
+						return message;
+				}
+
+				async handlePaginationCurrentChange(page: number) {
+						this.page = page;
+						await this.refresh(false);
+				}
+
+				async handlePaginationPageSizeChange(pageSize: number) {
+						ClientSettingsManager.updateClientSettings({ pageSize });
+						await this.refresh(false);
+				}
+
+				formatDate(row: number, column: number, cellValue: Date): string {
+					return cellValue?.toLocaleString('hr-HR', { timeZone: 'Europe/Zagreb' });
+				}
+
+
+				getRowClass(event: { row: MessageSummary }): string {
+						return event.row.isUnread ? "unread" : "read";
+				}
+
+				async relaySelected() {
+						if (this.selectedmessage == null) {
+								return;
+						}
+
+						let emails: string[];
+
+						try {
+								let dialogResult = await ElMessageBox.prompt(
+										"Email address(es) to relay to (separate multiple with ,)",
+										"Relay Message",
+										{
+												confirmButtonText: "OK",
+												inputValue: this.selectedmessage.to.join(","),
+												cancelButtonText: "Cancel",
+												inputPattern: /[^, ]+(, *[^, ]+)*/,
+												inputErrorMessage: "Invalid email addresses",
+										}
+								);
+
+								emails = dialogResult.value.split(",").map((e) => e.trim());
+						} catch {
+								return;
+						}
+
+						try {
+								this.isRelayInProgress = true;
+								await new MessagesController().relayMessage(this.selectedmessage.id, {
+										overrideRecipientAddresses: emails,
+								});
+
+								ElNotification.success({
+										title: "Relay Message Success",
+										message: "Completed OK",
+								});
+						} catch (e: any) {
+								const message = e.response?.data?.detail ?? e.message;
+
+								ElNotification.error({ title: "Relay Message Failed", message: message });
+						} finally {
+								this.isRelayInProgress = false;
+						}
+				}
+
+				async deleteSelected() {
+						if (this.selectedmessage == null) {
+								return;
+						}
+
+						this.loading = true;
+
+						let messageToDelete = this.selectedmessage;
+
+						let nextIndex = this.messages.indexOf(messageToDelete) + 1;
+						if (nextIndex < this.messages.length) {
+								this.selectMessage(this.messages[nextIndex]);
+						}
+
+						try {
+								await new MessagesController().delete(messageToDelete.id);
+								await this.refresh(false);
+						} catch (e: any) {
+								ElNotification.error({
+										title: "Delete Message Failed",
+										message: e.message,
+								});
+						} finally {
+								this.loading = false;
+						}
+				}
+
+				showFileSelector() {
+						// Create a hidden file input element
+						const fileInput = document.createElement('input');
+						fileInput.type = 'file';
+						fileInput.accept = '.eml';
+						fileInput.multiple = true;
+						fileInput.style.display = 'none';
+						
+						// Handle file selection
+						fileInput.addEventListener('change', (event: any) => {
+								const files = event.target.files;
+								if (files && files.length > 0) {
+										this.importFiles(Array.from(files));
+								}
+								// Clean up the temporary element
+								document.body.removeChild(fileInput);
+						});
+						
+						// Add to DOM and trigger click
+						document.body.appendChild(fileInput);
+						fileInput.click();
+				}
+
+				async importFiles(files: File[]) {
+						if (files.length === 0) {
+								return;
+						}
+						if (!this.selectedMailbox) {
+								return;
+						}
+						const selectedMailbox: string = this.selectedMailbox!;
+
+						let successCount = 0;
+						let failCount = 0;
+						const importedIds: string[] = [];
+
+						// Show initial progress notification and store reference to dismiss it later
+						const progressNotification = ElNotification.info({
+								title: "Import in Progress",
+								message: `Importing ${files.length} file(s)...`,
+								duration: 0  // Don't auto-dismiss, we'll handle it manually
+						});
+
+						try {
+								for (const file of files) {
+										try {
+												// Read file content as text
+												const emlContent = await this.readFileAsText(file);
+												
+												// Call the import API for this single file
+											const messageId = await new MessagesController().import(emlContent, String(selectedMailbox));
+												
+												successCount++;
+												importedIds.push(messageId);
+												
+										} catch (e: any) {
+												failCount++;
+												const message = e.response?.data ?? e.message;
+												ElNotification.error({ 
+														title: "Import Failed", 
+														message: `${file.name}: ${message}`,
+														duration: 5000
+												});
+										}
+								}
+
+								// Show final success notification
+								if (successCount > 0) {
+										ElNotification.success({
+												title: "Import Complete",
+												message: `Successfully imported ${successCount} of ${files.length} files`,
+												duration: 4000
+										});
+
+										// Refresh the message list
+										await this.refresh(false);
+										
+										// Select the first imported message by its specific ID with retry logic
+										if (importedIds.length > 0) {
+												const firstImportedId = importedIds[0];
+												
+												// Retry mechanism to wait for the imported message to appear in the list
+												let retryCount = 0;
+												const maxRetries = 10;
+												const retryDelay = 200; // 200ms between retries
+												
+												while (retryCount < maxRetries) {
+														const importedMessage = this.messages.find(m => m.id === firstImportedId);
+														if (importedMessage) {
+																this.selectMessage(importedMessage);
+																break;
+														}
+														
+														// Wait before retrying
+														await new Promise(resolve => setTimeout(resolve, retryDelay));
+														retryCount++;
+												}
+										}
+								}
+						} finally {
+								// Always dismiss the progress notification when import completes
+								progressNotification.close();
+						}
+				}
+
+				readFileAsText(file: File): Promise<string> {
+						return new Promise((resolve, reject) => {
+								const reader = new FileReader();
+								reader.onload = (e) => resolve(e.target?.result as string);
+								reader.onerror = (e) => reject(new Error('Failed to read file'));
+								reader.readAsText(file);
+						});
+				}
+
+				async clear() {
+
+						try {
+								await ElMessageBox.confirm(`Delete all messages in mailbox '${this.selectedMailbox}'?`)
+						} catch {
+								return;
+						}
+
+
+						try {
+								this.loading = true;
+								await new MessagesController().deleteAll(this.selectedMailbox!);
+								await this.refresh(true);
+						} catch (e: any) {
+								ElNotification.error({
+										title: "Delete All Messages Failed",
+										message: e.message,
+								});
+						} finally {
+								this.loading = false;
+						}
+				}
+
+				private debouncedRefresh = debounce(() => this.refresh(false), 200);
+
+				@Watch("searchTerm")
+				onSearchTermChanged() {
+						this.debouncedDoSearch();
+				}
+				debouncedDoSearch = debounce(() => this.refresh(false), 200);
+
+				@Watch("selectedMailbox")
+				async onMailboxChanged() {
+						this.initialMailboxLoadDone = false;
+						this.messageNotificationManager = null;
+						if (this.selectedMailbox) {
+								this.messageNotificationManager = new MessageNotificationManager(this.selectedMailbox,
+										(message) => {
+													if (this.selectedFolder && this.selectedFolder != "INBOX") {
+															this.selectedFolder = "INBOX";
+															this.pendingSelectMessageAfterRefresh = message;
+															return;
+													}
+
+												this.selectMessage(message);
+												this.handleCurrentChange(message);
+										}
+								);
+						}
+						// Default to INBOX folder when mailbox changes
+						this.selectedFolder = "INBOX";
+						await this.loadFolders();
+						await this.refresh(true, false);
+				}
+
+				@Watch("selectedFolder")
+				async onFolderChanged() {
+						await this.refresh(false);
+				}
+
+				async loadFolders() {
+						if (this.selectedMailbox) {
+								try {
+										this.availableFolders = await new MessagesController().getFolders(this.selectedMailbox);
+										// Ensure INBOX folder exists, if not fall back to first available folder
+										if (this.availableFolders.length > 0 && !this.availableFolders.includes("INBOX")) {
+												this.selectedFolder = this.availableFolders[0];
+										}
+								} catch (error) {
+										console.error("Failed to load folders:", error);
+										this.availableFolders = [];
+								}
+						} else {
+								this.availableFolders = [];
+						}
+				}
+
+				private lastSort: string | null = null;
+				private lastSortDescending: boolean = false;
+				private mutex = new Mutex();
+
+				initialMailboxLoadDone = false;
+
+				async markAllMessageRead() {
+						await new MessagesController().markAllMessageRead(this.selectedMailbox!);
+				}
+
+				async refresh(includeNotifications: boolean, silent: boolean = false) {
+						if (!silent) this.loading = true;
+						let unlock = await this.mutex.acquire();
+						try {
+								this.error = null;
+
+								const server = await this.connection!.getServer()
+								this.currentUsername = (server as any)?.currentUserName ?? (server as any)?.username ?? (server as any)?.currentUsername ?? (server as any)?.userName ?? null;
+								this.isRelayAvailable = !!server.relaySmtpServer;
+
+								const mailboxes = await new MailboxesController().getAll();
+								this.availableMailboxes = mailboxes.sort((a, b) => a.name.localeCompare(b.name));
+								if (!this.selectedMailbox) {
+										this.selectedMailbox = this.availableMailboxes.find(m => m.name == server.currentUserDefaultMailboxName)?.name ?? this.availableMailboxes[this.availableMailboxes.length - 1]?.name ?? null;
+								} else {
+										//Potentially removed mailbox
+										this.selectedMailbox = this.availableMailboxes.find(m => m.name == this.selectedMailbox)?.name ?? null;
+								}
+
+								// Get current pageSize from settings
+								const clientSettings = await ClientSettingsManager.getClientSettings();
+								const pageSize = clientSettings.pageSize || 25;
+
+								// Copy in case they are mutated during the async load below
+								let sortColumn = this.selectedSortColumn;
+								let sortDescending = this.selectedSortDescending;
+
+								if (!this.selectedMailbox) {
+										this.pagedServerMessages = { currentPage: 1, firstRowOnPage: 0, lastRowOnPage: 0, pageCount: 1, rowCount: 0, pageSize: pageSize, results: [] };
+								} else {
+
+										this.pagedServerMessages = await new MessagesController().getSummaries(
+												this.selectedMailbox,
+												this.searchTerm,
+												sortColumn,
+												sortDescending,
+												this.page,
+												pageSize,
+												this.selectedFolder || null
+										);
+								}
+
+								if (
+										!this.lastSort ||
+										this.lastSort != sortColumn ||
+										this.lastSortDescending != sortDescending ||
+										this.pagedServerMessages.results.length == 0
+								) {
+										this.messages.splice(
+												0,
+												this.messages.length,
+												...this.pagedServerMessages.results
+										);
+								} else {
+										sortedArraySync(
+												this.pagedServerMessages.results,
+												this.messages,
+												(a: MessageSummary, b: MessageSummary) => a.id == b.id,
+												(sourceItem: MessageSummary, targetItem: MessageSummary) => {
+														targetItem.isUnread = sourceItem.isUnread;
+														targetItem.isRelayed = sourceItem.isRelayed;
+												}
+										);
+								}
+
+								if (includeNotifications) {
+										await this.messageNotificationManager?.refresh(!this.initialMailboxLoadDone);
+								}
+
+								if (this.pendingSelectMessageAfterRefresh) {
+										this.selectMessage(this.pendingSelectMessageAfterRefresh);
+										this.pendingSelectMessageAfterRefresh = null;
+								}
+
+								this.initialMailboxLoadDone = true;
+								this.lastSort = sortColumn;
+								this.lastSortDescending = this.selectedSortDescending;
+						} catch (e: any) {
+								this.error = e;
+						} finally {
+								if (!silent) this.loading = false;
+								unlock();
+						}
+				}
+
+				async sort(sortOptions: { prop: string, order: string }) {
+						let descending: boolean = true;
+						if (sortOptions.order === "ascending") {
+								descending = false;
+						}
+
+						if (
+								this.selectedSortColumn != sortOptions.prop ||
+								this.selectedSortDescending != descending
+						) {
+								this.selectedSortColumn = sortOptions.prop || "receivedDate";
+								this.selectedSortDescending = descending;
+
+								await this.refresh(false);
+						}
+				}
+
+				async mounted() {
+						this.loading = true;
+						await this.refresh(true, false);
+				}
+
+				async created() {
+				}
+
+				@Watch("connection")
+				async onConnectionChanged() {
+						if (this.connection) {
+								this.connection.on("messageschanged", async () => {
+										await this.refresh(true, true);
+								});
+								this.connection.onServerChanged(async () => {
+										await this.refresh(true, true);
+								});
+								this.connection.on("mailboxeschanged", async () => {
+										await this.refresh(false, true);
+								});
+								this.connection.addOnConnectedCallback(() => {
+										this.refresh(true, true);
+								});
+						}
+				}
+		}
+
+
+		export default toNative(MessageList)
 </script>

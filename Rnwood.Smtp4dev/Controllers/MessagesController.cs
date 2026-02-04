@@ -338,11 +338,13 @@ namespace Rnwood.Smtp4dev.Controllers
         [HttpPost("{id}/relay")]
         public async Task<IActionResult> RelayMessage(Guid id, [FromBody] MessageRelayOptions options)
         {
+            string authenticatedUser = Request.HttpContext.User?.Identity?.Name ?? "";
+
             var message = await GetDbMessage(id, true);
             var relayResult = server.TryRelayMessage(message,
                 options?.OverrideRecipientAddresses?.Length > 0
                     ? options?.OverrideRecipientAddresses.Select(a => MailboxAddress.Parse(a)).ToArray()
-                    : null);
+                    : null, authenticatedUser);
 
             if (relayResult.Exceptions.Any())
             {
