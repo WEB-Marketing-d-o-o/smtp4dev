@@ -4,7 +4,8 @@
 A dummy SMTP server for Windows, Linux, Mac OS-X (and maybe elsewhere where .NET Core is available). Lets you test your application without spamming your real customers.
 
 ## WEB Marketing Fork changes
-- MailBox isloation, only admin user have mailbox drop down enabled, other users cannot change mailbox
+- Mailbox isloation, only admin user have Mailbox drop down enabled, other users cannot change Mailbox
+- Subject Prefix option added to Mailbox, this will add prefix to subject for mails in Mailbox (Relayed mails included)
 - label with current username is added after search box
 - forcing Croatian date locale (TODO: add setting)
 - added current user variable `session.authenticatedUser` in script expressions eg. Message Relay / Auto Relay Expression. So we can use expressions like: `session.authenticatedUser == 'cms' ? 'javniserver@wem.hr' : null`
