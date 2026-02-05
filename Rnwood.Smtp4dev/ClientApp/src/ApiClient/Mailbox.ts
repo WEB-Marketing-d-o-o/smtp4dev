@@ -10,6 +10,4 @@ export default class Mailbox {
         this.recipients = recipients;
         this.subjectPrefix = subjectPrefix;
     }
-
-
 }
