@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using Rnwood.Smtp4dev.DbModel;
 using Rnwood.Smtp4dev.Hubs;
 using Rnwood.SmtpServer;
@@ -627,11 +627,17 @@ namespace Rnwood.Smtp4dev.Server
         {
             log.Information("Processing received message for mailbox '{mailbox}' for recipients '{recipients}'", targetMailboxWithRecipients.Key.Name, targetMailboxWithRecipients.ToArray());
             using var scope = serviceScopeFactory.CreateScope();
-            Smtp4devDbContext dbContext = scope.ServiceProvider.GetService<Smtp4devDbContext>();
-            
+            Smtp4devDbContext dbContext = scope.ServiceProvider.GetService<Smtp4devDbContext>();            
+
             message.Session = dbContext.Sessions.Find(activeSessionsToDbId[session]);
             message.Mailbox = dbContext.Mailboxes.FirstOrDefault(m => m.Name == targetMailboxWithRecipients.Key.Name);
-            
+
+            // Add subject prefix if configured
+            if (message.Mailbox != null && !string.IsNullOrEmpty(targetMailboxWithRecipients.Key.SubjectPrefix))
+            {
+                message.Subject = targetMailboxWithRecipients.Key.SubjectPrefix + message.Subject;
+            }
+
             // Assign message to INBOX folder by default for SMTP received messages
             if (message.Mailbox != null)
             {
@@ -769,6 +775,17 @@ namespace Rnwood.Smtp4dev.Server
                     var apiMsg = new ApiModel.Message(message);
                     MimeMessage newEmail = apiMsg.MimeMessage;
                     
+                    if (message.Mailbox != null)
+                    {
+                        var serverOptionsCurrentValue = this.serverOptions.CurrentValue;
+                        var configuredMailboxesAndDefault = serverOptionsCurrentValue.Mailboxes.Concat(new[] { new MailboxOptions { Name = MailboxOptions.DEFAULTNAME } });
+                        var mailboxOptions = configuredMailboxesAndDefault.FirstOrDefault(m => m.Name == message.Mailbox.Name);
+                        if (mailboxOptions != null && !string.IsNullOrEmpty(mailboxOptions.SubjectPrefix))
+                        {
+                            newEmail.Subject = mailboxOptions.SubjectPrefix + newEmail.Subject;
+                        }
+                    }
+
                     // Determine the sender address - use custom if configured, otherwise use original
                     bool hasCustomSenderAddress = !string.IsNullOrEmpty(relayOptions.CurrentValue.SenderAddress);
                     MailboxAddress sender = MailboxAddress.Parse(

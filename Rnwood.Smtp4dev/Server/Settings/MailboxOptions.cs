@@ -11,6 +11,7 @@ namespace Rnwood.Smtp4dev.Server.Settings
     {
         public string Name { get; set; }
         public string Recipients { get; set; }
+        public string SubjectPrefix { get; set; } = string.Empty;
 
         internal const string DEFAULTNAME = "Default";
     }
